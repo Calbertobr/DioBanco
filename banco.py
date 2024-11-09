@@ -1,6 +1,6 @@
 #!/bin/python3
 
-from datetime import date
+from datetime import date, datetime
 from os import system
 from os.path import isfile 
 if isfile('data.py') :
@@ -14,15 +14,20 @@ else:
 Data = date.today()
 SaquesDiarios = 3
 Limite = 0 
-Data = date.today()
+Data = datetime.today().strftime("%d/%m/%Y %H:%M")
 MsgErro = ""
 ExtratoHeader = [ 'Data Evento', 'Tipo Evento', 'Valor operação', 'Saldo Atual' ]
 
 
+def Line(char = '-', msg = '',size = 0):
+    linha = msg.center(size,char)
+    linha = f'|{linha}|'
+    return linha
+
 def MenuApresenta(MsgErro):
     MenuInterativo = f"""
-|{'MENU'.center(40,'-')}|
-|{' '.center(40,' ')}|
+{Line(msg='MENU', size=40, char ='-')}
+{Line(size = 40, char = ' ' )}
 |   \033[32mDigite a opção desejada\033[m              |
 |                                        |
 |   \033[34mD\033[m - Deposito                         |
@@ -34,20 +39,20 @@ def MenuApresenta(MsgErro):
     if MsgErro != "":
         MenuInterativo += f"|                                        |\n"
         MenuInterativo += f"|\033[31m{ MsgErro.center(40,' ')}\033[m|\n"
-    MenuInterativo += f"|{' '.center(40,' ')}|\n"
-    MenuInterativo += f"|{ str(Data).center(40,'-')}|\n"
+    MenuInterativo += f"{Line(size=40, char =' ')}\n"
+    MenuInterativo += f"{Line(msg=str(Data), size=40, char ='-')}\n"
     return MenuInterativo
 
 
 def Extrato():
     global ExtratoHeader
-    ExtratoCompletoHed = f'|  {ExtratoHeader[0]:12}| {ExtratoHeader[1]:19}| {ExtratoHeader[2]:19}| {ExtratoHeader[3]:19}|\n -----------------------------------------------------------------------------' 
+    ExtratoCompletoHed = f'\n{ Line(size = 81) }\n|  {ExtratoHeader[0]:16}| {ExtratoHeader[1]:19}| {ExtratoHeader[2]:19}| {ExtratoHeader[3]:19}|\n{Line(size = 81)}' 
     print(ExtratoCompletoHed)
     global ExtratoHistorico
     ExtratoCompleto = ''
     for a in ExtratoHistorico:
-        ExtratoCompleto += f"| - {a[0]}{'':1}| {a[1]:19}| R$ {a[2]:15.2f} | R$ {a[3]:15.2f} |\n"
-    ExtratoCompleto += f"|{ str(Data).center(77,'-')}|\n"
+        ExtratoCompleto += f"| {a[0]}{'':1}| {a[1]:19}| R$ {a[2]:15.2f} | R$ {a[3]:15.2f} |\n"
+    ExtratoCompleto += f"{ Line(msg=str(Data),size = 81)}\n"
     print(ExtratoCompleto)
     input("Clique 'S' para continuar.")
 
