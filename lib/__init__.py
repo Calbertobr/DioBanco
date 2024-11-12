@@ -19,13 +19,27 @@ def BancoWrite(Sql):
 #
 def CheckBanco():
     if isfile('data.db') :
-        Sql = ('select count(*) from "movimentacao" ;')
+        Sql = ('select count(*) from movimentacao ;')
         Result = BancoWrite(Sql)
-        print(f'Banco com {Result[0][0]} itens.')
+        print(f'Banco com {Result[0][0]} registros.')
+        Sql = ('select count(*) from cliente ;')
+        Result = BancoWrite(Sql)
+        print(f'Banco com {Result[0][0]} clientes.')
     else:
-        BancoCreate = (f'''CREATE TABLE "movimentacao" ( "ID" INTEGER NOT NULL UNIQUE, "DATA" TEXT NOT NULL, "CONTA" INTEGER NOT NULL, 
-                        "TRANSACAO" INTEGER NOT NULL, "VALOR_TRANSACAO" INTEGER, "SALDO" INTEGER, PRIMARY KEY("ID" AUTOINCREMENT) );''',)
-        BancoWrite(BancoCreate[0])
+        DataBaseCreate = (
+    """
+    CREATE TABLE Cliente (
+    CONTA INTEGER NOT NULL, NOME TEXT NOT NULL, CPF INTEGER NOT NULL, CEP INTEGER NOT NULL, NUMERO INTEGER NOT NULL,
+    PRIMARY KEY(CONTA AUTOINCREMENT));
+    """,
+    """
+    CREATE TABLE movimentacao (
+    ID INTEGER NOT NULL UNIQUE, DATA TEXT NOT NULL, CONTA INTEGER NOT NULL, TRANSACAO INTEGER NOT NULL, VALOR_TRANSACAO INTEGER,
+    SALDO INTEGER, PRIMARY KEY("ID" AUTOINCREMENT),
+    FOREIGN KEY(CONTA) REFERENCES CLIENTE ( CONTA ));
+    """)
+        BancoWrite(DataBaseCreate[0])
+        BancoWrite(DataBaseCreate[1])
         print(f'Banco com 0 itens.')
 
 #####################################################################################
@@ -34,6 +48,36 @@ def CheckBanco():
 #
 def FormtData(data):
     return datetime.strptime(data,"%Y%m%d%H%M%S").strftime("%d/%m/%Y %H:%M:%S")
+
+#####################################################################################
+#
+# Mota form cadastro cliente
+#
+def CadastraCliente(Conta):
+    Sql = f"Select ifnull(count(*),0) qtd from cliente where conta = {Conta}" 
+    Results = BancoWrite(Sql)
+    if Results[0][0] != 1 :
+        form   = ("Favor fornecer seu Nome: ", "Informe seu cpf: ", "Qual cep de sua moradia: ", "Qual numero: ")
+        Cpf    = input(form[1])
+        Sql = f"Select conta qtd from cliente where cpf = {Cpf}" 
+        Results = BancoWrite(Sql)
+        if len(Results) == 1 :
+            print(f"Este ja tem conta vinculada de numero {Results[0][0]}")
+            input('Tecle "S" para continuar')
+            return Results[0][0]
+        Nome   = input(form[0])
+        Cep    = input(form[2])
+        Numero = input(form[3])
+        Sql = f" insert into cliente ( nome, cpf, cep, numero ) values ('{Nome}',{Cpf},{Cep},{Numero} ) ;"
+        BancoWrite(Sql)
+        Sql = f" select conta from cliente where cpf = '{Cpf}' ;"
+        Results = BancoWrite(Sql)
+        CheckConta(Results[0][0])
+        Conta = Results[0][0]
+        return Conta
+    else:
+        CheckConta(Conta)
+        return Conta
 
 #####################################################################################
 #
@@ -67,14 +111,23 @@ def Line(char = '-', msg = '',size = 0):
 # Valida Transações
 #
 def MovimentoValid(Conta,Tipo):
-    Sql = f"""  select count(*) as Saques from movimentacao where conta = {Conta} and transacao = 2 and substring(data,0,9) = '{DataAtual('s')}' group by substring(data,0,9),transacao ;"""
-    Result = BancoWrite(Sql)
-    if Result[0][0] >= 3 :
-        return "Limite de saque diario alcançado"
-    Sql = f"""  select count(*) as Movimentos from movimentacao where conta = {Conta} and substring(data,0,9) = '{DataAtual('s')}' group by substring(data,0,9) ;"""
-    Result = BancoWrite(Sql)
-    if Result[0][0] >= 10 :
-        return "Limite de movimentação diaria alcançada"
+    Sql = f"""  select ifnull(count(*),0) as Movimentos from movimentacao where conta = {Conta} and substring(data,0,9) = '{DataAtual('s')}' group by substring(data,0,9) ;"""
+    Movim = BancoWrite(Sql)
+    if len(Movim) == 0 :
+        return
+    else:
+        Movim = Movim[0][0]
+        Sql = f"""  select ifnull(count(*),0) as Saques from movimentacao where conta = {Conta} and transacao in (0,2) and substring(data,0,9) = '{DataAtual('s')}' group by substring(data,0,9) ;"""
+        Saque = BancoWrite(Sql)[0][0]
+
+        if Movim >= 10 :
+            return "Limite de movimentação diaria alcançada"
+        else:
+            if Saque > 3 and Tipo == 2 :
+                return "Limite de saque diario alcançado"
+            else:
+                return    
+
 
 #####################################################################################
 #
@@ -175,18 +228,26 @@ def CheckConta(Conta):
 # Extrato 
 #
 def Extrato(Conta):
-    ExtratoHeader = [ 'id','Data Evento', 'Conta', 'Tipo Evento', 'Valor', 'Saldo Atual' ]
-    ExtratoCompleto = f'''
-{ Line(size = 84 ) }
-| {ExtratoHeader[0]:4}| {ExtratoHeader[1]:20}| {ExtratoHeader[3]:25}| {ExtratoHeader[4]:12} | {ExtratoHeader[5]:12} |
-{Line(size = 84 )}
-'''
+    ExtratoHeader = ('id','Data Evento', 'Conta', 'Tipo Evento', 'Valor', 'Saldo Atual')
+    ClienteHeader  = ('Conta','Nome','Cep','Numero','Cpf')
+    ExtratoCompleto = f"{ Line(size = 84 ) }\n"
+    ExtratoCompleto += f"| {ClienteHeader[0]} | {ClienteHeader[1]:37} | {ClienteHeader[2]:8} | {ClienteHeader[3]:5} | {ClienteHeader[4]:14} |\n"
+    ExtratoCompleto = f"{ Line(size = 84 ) }\n"
+    Sql = f"select * from cliente where conta = {Conta};"
+    Results = BancoWrite(Sql)
+    for data in Results:
+        cpf = str(data[2])
+        Cpf = f'{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[-2:]}'
+        ExtratoCompleto += f"| {data[0]:5} | {data[1]:37} | {data[3]:8} | {data[4]:6} | {Cpf} |\n"
+    ExtratoCompleto += f"{ Line(char=' ',size = 84 )}\n"
+    ExtratoCompleto += f'{Line(size = 84 )}\n'
+    ExtratoCompleto += f'| {ExtratoHeader[0]:3} | {ExtratoHeader[1]:20}| {ExtratoHeader[3]:25}| {ExtratoHeader[4]:12} | {ExtratoHeader[5]:12} |\n'
+    ExtratoCompleto += f'{Line(size = 84 )}\n'
     Sql = f'select * from movimentacao where CONTA = {Conta}'
     Result = BancoWrite(Sql)
     for moviment in Result :
         ExtratoCompleto += f'| {moviment[0]:3} | {FormtData(moviment[1])} | {MovimentoTipo(moviment[3]):24} | {moviment[4]:12.2f} | {moviment[5]:12.2f} |\n'
-    ExtratoCompleto += f'''{ Line(char=' ',size = 84 )}
-{ Line(msg=str(DataAtual()),size = 84 )}
-'''
+    ExtratoCompleto += f"{ Line(char=' ',size = 84 )}\n"
+    ExtratoCompleto += f'{ Line(msg=str(DataAtual()),size = 84 ) }\n'
     print(ExtratoCompleto)
     input("Clique 'S' para continuar.")
